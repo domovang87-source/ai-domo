@@ -45,7 +45,7 @@ export async function POST(req: Request) {
             stripe_subscription_id: subscription.id,
             subscription_status: subscription.status,
             subscription_current_period_end: new Date(
-              subscription.current_period_end * 1000
+              subscription.currentPeriodEnd * 1000
             ).toISOString(),
             updated_at: new Date().toISOString(),
           })
@@ -96,7 +96,7 @@ export async function POST(req: Request) {
           .update({
             subscription_status: subscription.status,
             subscription_current_period_end: new Date(
-              subscription.current_period_end * 1000
+              subscription.currentPeriodEnd * 1000
             ).toISOString(),
             updated_at: new Date().toISOString(),
           })
