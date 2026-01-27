@@ -41,16 +41,24 @@ export async function POST(req: Request) {
           break
         }
 
+        // Get current_period_end from subscription items if not at root level
+        const currentPeriodEnd = (subscription as any).current_period_end ||
+          (subscription.items?.data?.[0] as any)?.current_period_end
+
+        const updateData: any = {
+          stripe_subscription_id: subscription.id,
+          subscription_status: subscription.status,
+          updated_at: new Date().toISOString(),
+        }
+
+        // Only add period end if it exists and is valid
+        if (currentPeriodEnd && typeof currentPeriodEnd === 'number') {
+          updateData.subscription_current_period_end = new Date(currentPeriodEnd * 1000).toISOString()
+        }
+
         await supabase
           .from('users')
-          .update({
-            stripe_subscription_id: subscription.id,
-            subscription_status: subscription.status,
-            subscription_current_period_end: new Date(
-              (subscription as any).current_period_end * 1000
-            ).toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', userId)
 
         console.log(`Updated subscription for user ${userId}: ${subscription.status}`)
@@ -93,15 +101,23 @@ export async function POST(req: Request) {
           break
         }
 
+        // Get current_period_end from subscription items if not at root level
+        const currentPeriodEnd = (subscription as any).current_period_end ||
+          (subscription.items?.data?.[0] as any)?.current_period_end
+
+        const updateData: any = {
+          subscription_status: subscription.status,
+          updated_at: new Date().toISOString(),
+        }
+
+        // Only add period end if it exists and is valid
+        if (currentPeriodEnd && typeof currentPeriodEnd === 'number') {
+          updateData.subscription_current_period_end = new Date(currentPeriodEnd * 1000).toISOString()
+        }
+
         await supabase
           .from('users')
-          .update({
-            subscription_status: subscription.status,
-            subscription_current_period_end: new Date(
-              (subscription as any).current_period_end * 1000
-            ).toISOString(),
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', userId)
 
         console.log(`Payment succeeded for user ${userId}`)
