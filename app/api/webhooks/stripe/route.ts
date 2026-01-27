@@ -31,6 +31,56 @@ export async function POST(req: Request) {
 
     // Handle the event
     switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session
+        const userId = (session as any).subscription_data?.metadata?.supabase_user_id ||
+          (session as any).client_reference_id
+
+        if (!userId) {
+          console.error('No user ID in checkout session')
+          break
+        }
+
+        // Get the subscription ID from the session
+        const subscriptionId = (session as any).subscription as string
+
+        if (!subscriptionId) {
+          console.log('No subscription in checkout session (one-time payment?)')
+          break
+        }
+
+        // Retrieve full subscription details
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+
+        // Get current_period_end from subscription items if not at root level
+        const currentPeriodEnd = (subscription as any).current_period_end ||
+          (subscription.items?.data?.[0] as any)?.current_period_end
+
+        const updateData: any = {
+          stripe_subscription_id: subscription.id,
+          stripe_customer_id: (session as any).customer as string,
+          subscription_status: subscription.status,
+          updated_at: new Date().toISOString(),
+        }
+
+        // Only add period end if it exists and is valid
+        if (currentPeriodEnd && typeof currentPeriodEnd === 'number') {
+          updateData.subscription_current_period_end = new Date(currentPeriodEnd * 1000).toISOString()
+        }
+
+        const { data, error } = await supabase
+          .from('users')
+          .update(updateData)
+          .eq('id', userId)
+
+        if (error) {
+          console.error(`Failed to update user after checkout ${userId}:`, error)
+        } else {
+          console.log(`Checkout completed for user ${userId}, status: ${subscription.status}`, data)
+        }
+        break
+      }
+
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription
@@ -56,12 +106,16 @@ export async function POST(req: Request) {
           updateData.subscription_current_period_end = new Date(currentPeriodEnd * 1000).toISOString()
         }
 
-        await supabase
+        const { data, error } = await supabase
           .from('users')
           .update(updateData)
           .eq('id', userId)
 
-        console.log(`Updated subscription for user ${userId}: ${subscription.status}`)
+        if (error) {
+          console.error(`Failed to update subscription for user ${userId}:`, error)
+        } else {
+          console.log(`Updated subscription for user ${userId}: ${subscription.status}`, data)
+        }
         break
       }
 
@@ -115,12 +169,16 @@ export async function POST(req: Request) {
           updateData.subscription_current_period_end = new Date(currentPeriodEnd * 1000).toISOString()
         }
 
-        await supabase
+        const { data: paymentData, error: paymentError } = await supabase
           .from('users')
           .update(updateData)
           .eq('id', userId)
 
-        console.log(`Payment succeeded for user ${userId}`)
+        if (paymentError) {
+          console.error(`Failed to update after payment for user ${userId}:`, paymentError)
+        } else {
+          console.log(`Payment succeeded for user ${userId}`, paymentData)
+        }
         break
       }
 
